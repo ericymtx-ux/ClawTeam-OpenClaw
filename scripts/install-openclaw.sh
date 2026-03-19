@@ -168,7 +168,37 @@ else
     ok "Skill file installed to $SKILL_DST"
 fi
 
-# ─── 9. Verify clawteam --version ────────────────────────────────────────────
+# ─── 9. Configure exec approvals ─────────────────────────────────────────────
+info "Configuring exec approvals for ClawTeam..."
+APPROVALS_FILE="$HOME/.openclaw/exec-approvals.json"
+if [[ -f "$APPROVALS_FILE" ]]; then
+    # Ensure security is "allowlist" (not "full") so spawned agents don't get
+    # stuck on interactive permission prompts when running clawteam commands.
+    CURRENT_SECURITY=$(python3 -c "import json; d=json.load(open('$APPROVALS_FILE')); print(d.get('defaults',{}).get('security',''))" 2>/dev/null || echo "")
+    if [[ "$CURRENT_SECURITY" == "full" ]]; then
+        python3 -c "
+import json
+with open('$APPROVALS_FILE') as f:
+    d = json.load(f)
+d['defaults']['security'] = 'allowlist'
+with open('$APPROVALS_FILE', 'w') as f:
+    json.dump(d, f, indent=2)
+" 2>/dev/null
+        ok "Exec approvals security: full -> allowlist (prevents spawned agents from blocking on permission prompts)"
+    else
+        ok "Exec approvals security already: ${CURRENT_SECURITY:-default}"
+    fi
+    # Add clawteam to the allowlist for all agents
+    if command -v openclaw &>/dev/null; then
+        openclaw approvals allowlist add --agent "*" "*/clawteam" &>/dev/null 2>&1 && \
+            ok "Added clawteam to exec approvals allowlist" || \
+            warn "Could not add clawteam to allowlist (gateway may not be running)"
+    fi
+else
+    warn "exec-approvals.json not found — run openclaw once first, then re-run this script"
+fi
+
+# ─── 10. Verify clawteam --version ───────────────────────────────────────────
 info "Verifying installation..."
 if "$CLAWTEAM_BIN" --version &>/dev/null; then
     CT_VERSION="$("$CLAWTEAM_BIN" --version 2>&1)"
@@ -177,7 +207,7 @@ else
     warn "clawteam --version did not return cleanly, but the binary exists."
 fi
 
-# ─── 10. Success ─────────────────────────────────────────────────────────────
+# ─── 11. Success ─────────────────────────────────────────────────────────────
 echo ""
 printf "${BOLD}${GREEN}"
 cat << 'MSG'
