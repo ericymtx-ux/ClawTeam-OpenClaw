@@ -1,6 +1,7 @@
 """Tests for clawteam.templates — loading, parsing, and variable substitution."""
 
 import pytest
+from pydantic import ValidationError
 
 from clawteam.templates import (
     AgentDef,
@@ -62,6 +63,99 @@ class TestModels:
         assert t.backend == "tmux"
         assert t.agents == []
         assert t.tasks == []
+
+
+class TestModelFields:
+    def test_agent_def_model_defaults_none(self):
+        a = AgentDef(name="worker")
+        assert a.model is None
+        assert a.model_tier is None
+
+    def test_agent_def_with_model(self):
+        a = AgentDef(name="worker", model="opus")
+        assert a.model == "opus"
+
+    def test_agent_def_with_valid_tier(self):
+        a = AgentDef(name="worker", model_tier="strong")
+        assert a.model_tier == "strong"
+
+    def test_agent_def_invalid_tier_raises(self):
+        with pytest.raises(ValidationError, match="model_tier"):
+            AgentDef(name="worker", model_tier="ultra")
+
+    def test_template_def_model_defaults(self):
+        leader = AgentDef(name="lead")
+        t = TemplateDef(name="test", leader=leader)
+        assert t.model is None
+        assert t.model_strategy is None
+
+    def test_template_def_with_model(self):
+        leader = AgentDef(name="lead")
+        t = TemplateDef(name="test", leader=leader, model="sonnet-4.6")
+        assert t.model == "sonnet-4.6"
+
+    def test_template_def_valid_strategy(self):
+        leader = AgentDef(name="lead")
+        t = TemplateDef(name="test", leader=leader, model_strategy="auto")
+        assert t.model_strategy == "auto"
+
+    def test_template_def_none_strategy(self):
+        leader = AgentDef(name="lead")
+        t = TemplateDef(name="test", leader=leader, model_strategy="none")
+        assert t.model_strategy == "none"
+
+    def test_template_def_invalid_strategy_raises(self):
+        leader = AgentDef(name="lead")
+        with pytest.raises(ValidationError, match="model_strategy"):
+            TemplateDef(name="test", leader=leader, model_strategy="magic")
+
+
+class TestParseTomlWithModel:
+    def test_toml_with_agent_model(self, tmp_path, monkeypatch):
+        toml_content = """\
+[template]
+name = "model-test"
+model = "sonnet-4.6"
+
+[template.leader]
+name = "boss"
+model = "opus"
+
+[[template.agents]]
+name = "worker"
+model_tier = "cheap"
+"""
+        tpl_dir = tmp_path / "templates"
+        tpl_dir.mkdir()
+        (tpl_dir / "model-test.toml").write_text(toml_content)
+
+        import clawteam.templates as tmod
+        monkeypatch.setattr(tmod, "_USER_DIR", tpl_dir)
+
+        tmpl = load_template("model-test")
+        assert tmpl.model == "sonnet-4.6"
+        assert tmpl.leader.model == "opus"
+        assert tmpl.agents[0].model_tier == "cheap"
+
+    def test_toml_with_strategy(self, tmp_path, monkeypatch):
+        toml_content = """\
+[template]
+name = "strategy-test"
+model_strategy = "auto"
+
+[template.leader]
+name = "boss"
+type = "leader"
+"""
+        tpl_dir = tmp_path / "templates"
+        tpl_dir.mkdir()
+        (tpl_dir / "strategy-test.toml").write_text(toml_content)
+
+        import clawteam.templates as tmod
+        monkeypatch.setattr(tmod, "_USER_DIR", tpl_dir)
+
+        tmpl = load_template("strategy-test")
+        assert tmpl.model_strategy == "auto"
 
 
 class TestLoadBuiltinTemplate:

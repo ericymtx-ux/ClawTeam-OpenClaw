@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # TOML support: built-in on 3.11+, conditional dependency on 3.10
 if sys.version_info >= (3, 11):
@@ -21,11 +21,24 @@ else:
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+VALID_TIERS = {"strong", "balanced", "cheap"}
+VALID_STRATEGIES = {"auto", "none"}
+
+
 class AgentDef(BaseModel):
     name: str
     type: str = "general-purpose"
     task: str = ""
     command: list[str] | None = None
+    model: str | None = None
+    model_tier: str | None = None
+
+    @field_validator("model_tier")
+    @classmethod
+    def validate_tier(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_TIERS:
+            raise ValueError(f"Invalid model_tier '{v}'. Must be one of: {VALID_TIERS}")
+        return v
 
 
 class TaskDef(BaseModel):
@@ -39,9 +52,18 @@ class TemplateDef(BaseModel):
     description: str = ""
     command: list[str] = ["openclaw"]
     backend: str = "tmux"
+    model: str | None = None
+    model_strategy: str | None = None
     leader: AgentDef
     agents: list[AgentDef] = []
     tasks: list[TaskDef] = []
+
+    @field_validator("model_strategy")
+    @classmethod
+    def validate_strategy(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_STRATEGIES:
+            raise ValueError(f"Invalid model_strategy '{v}'. Must be one of: {VALID_STRATEGIES}")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +116,8 @@ def _parse_toml(path: Path) -> TemplateDef:
         description=tmpl.get("description", ""),
         command=tmpl.get("command", ["openclaw"]),
         backend=tmpl.get("backend", "tmux"),
+        model=tmpl.get("model"),
+        model_strategy=tmpl.get("model_strategy"),
         leader=leader,
         agents=agents,
         tasks=tasks,
