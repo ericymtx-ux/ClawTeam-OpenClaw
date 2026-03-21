@@ -19,6 +19,19 @@ class TestClawTeamConfig:
         assert cfg.default_backend == "subprocess"
         assert cfg.workspace == "never"
 
+    def test_default_model_empty(self):
+        cfg = ClawTeamConfig()
+        assert cfg.default_model == ""
+
+    def test_model_tiers_empty(self):
+        cfg = ClawTeamConfig()
+        assert cfg.model_tiers == {}
+
+    def test_custom_model_config(self):
+        cfg = ClawTeamConfig(default_model="opus", model_tiers={"strong": "gpt-5.4"})
+        assert cfg.default_model == "opus"
+        assert cfg.model_tiers["strong"] == "gpt-5.4"
+
 
 class TestLoadSaveConfig:
     def test_load_returns_defaults_when_no_file(self):
@@ -45,6 +58,13 @@ class TestLoadSaveConfig:
         # should fall back to defaults, not crash
         cfg = load_config()
         assert cfg == ClawTeamConfig()
+
+    def test_model_config_roundtrip(self):
+        cfg = ClawTeamConfig(default_model="opus", model_tiers={"strong": "gpt-5.4"})
+        save_config(cfg)
+        loaded = load_config()
+        assert loaded.default_model == "opus"
+        assert loaded.model_tiers == {"strong": "gpt-5.4"}
 
 
 class TestGetEffective:
@@ -88,3 +108,9 @@ class TestGetEffective:
         val, source = get_effective("nonexistent_key")
         assert val == ""
         assert source == "default"
+
+    def test_default_model_from_env(self, monkeypatch):
+        monkeypatch.setenv("CLAWTEAM_DEFAULT_MODEL", "opus")
+        val, source = get_effective("default_model")
+        assert val == "opus"
+        assert source == "env"
