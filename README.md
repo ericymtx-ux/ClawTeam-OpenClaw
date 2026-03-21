@@ -300,6 +300,8 @@ clawteam launch hedge-fund --team fund1 --goal "Analyze AAPL, MSFT, NVDA for Q2 
 
 5 analyst agents (value, growth, technical, fundamentals, sentiment) work in parallel. Risk manager synthesizes all signals. Portfolio manager makes final decisions.
 
+The hedge-fund template is designed for progressive synthesis: the risk manager should send an interim report once enough signals exist to form a usable view, and the portfolio manager should start a draft final report before every upstream section is perfect. Missing analyst inputs should be called out explicitly instead of blocking the run.
+
 Templates are TOML files — **create your own** for any domain.
 
 ---
@@ -455,6 +457,7 @@ clawteam spawn tmux codex --team <team> --agent-name <name> --task "do this"
 clawteam task create <team> "subject" -o <owner> --blocked-by <id1>,<id2>
 clawteam task update <team> <id> --status completed   # auto-unblocks dependents
 clawteam task list <team> --status blocked --owner worker1
+clawteam task stalled <team> --older-than-minutes 15 --notify
 clawteam task wait <team> --timeout 300
 
 # Messaging

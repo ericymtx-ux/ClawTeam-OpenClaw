@@ -42,6 +42,7 @@ class BoardCollector:
 
         # Tasks grouped by status
         all_tasks = store.list_tasks()
+        stalled_ids = {item["id"] for item in store.list_stalled()}
         grouped: dict[str, list[dict]] = {
             "pending": [],
             "in_progress": [],
@@ -50,12 +51,15 @@ class BoardCollector:
         }
         for t in all_tasks:
             td = json.loads(t.model_dump_json(by_alias=True, exclude_none=True))
+            if t.id in stalled_ids:
+                td["stalled"] = True
             grouped[t.status.value].append(td)
 
         summary = {
             s: len(grouped[s]) for s in grouped
         }
         summary["total"] = len(all_tasks)
+        summary["stalled"] = len(stalled_ids)
 
         # Find leader name
         leader_name = ""

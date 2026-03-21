@@ -957,6 +957,67 @@ def task_stats(
     _output(stats, _human)
 
 
+@task_app.command("stalled")
+def task_stalled(
+    team: str = typer.Argument(..., help="Team name"),
+    older_than_minutes: float = typer.Option(15.0, "--older-than-minutes", "-m", help="Only show in-progress tasks older than this threshold"),
+    notify: bool = typer.Option(False, "--notify", help="Send a recovery nudge to the leader for each stalled task"),
+):
+    """List stale in-progress tasks and optionally nudge the leader.
+
+    This is a practical recovery aid for teams where tasks appear in progress on the
+    board but the owning worker has gone idle, stalled, or disconnected.
+    """
+    from clawteam.team.mailbox import MailboxManager
+    from clawteam.team.manager import TeamManager
+    from clawteam.team.tasks import TaskStore
+
+    store = TaskStore(team)
+    stalled = store.list_stalled(older_than_minutes=older_than_minutes)
+
+    if notify and stalled:
+        leader_name = TeamManager.get_leader_name(team)
+        if leader_name:
+            mailbox = MailboxManager(team)
+            for item in stalled:
+                mailbox.send(
+                    from_agent="clawteam-monitor",
+                    to=leader_name,
+                    content=(
+                        f"STALLED TASK: {item['id']} owned by {item['owner'] or '(unassigned)'} "
+                        f"has been in_progress for {item['age_minutes']} minutes. "
+                        f"Subject: {item['subject']}. Consider nudging, replacing, or force-reassigning this worker."
+                    ),
+                )
+
+    def _human(data):
+        items = data.get("tasks", [])
+        if not items:
+            console.print("[green]No stalled tasks found[/green]")
+            return
+        table = Table(title=f"Stalled Tasks - {team}")
+        table.add_column("ID", style="dim")
+        table.add_column("Subject", style="cyan")
+        table.add_column("Owner")
+        table.add_column("Age")
+        table.add_column("Locked By", style="yellow")
+        table.add_column("Updated", style="dim")
+        for item in items:
+            table.add_row(
+                item["id"],
+                item["subject"],
+                item["owner"] or "",
+                f"{item['age_minutes']}m",
+                item["locked_by"] or "",
+                (item["updated_at"] or "")[:19],
+            )
+        console.print(table)
+        if notify:
+            console.print("[green]Leader notified for stalled tasks[/green]")
+
+    _output({"team": team, "olderThanMinutes": older_than_minutes, "tasks": stalled, "notified": notify}, _human)
+
+
 # ============================================================================
 # Cost Commands
 # ============================================================================

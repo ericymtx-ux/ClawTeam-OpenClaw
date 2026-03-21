@@ -152,10 +152,14 @@ class BoardRenderer:
                 task_id = t.get("id", "")[:8]
                 subject = t.get("subject", "")
                 owner = t.get("owner", "") or "-"
-                lines.append(f"[bold]#{task_id}[/bold] {subject}")
+                stalled = bool(t.get("stalled"))
+                stalled_tag = " [red](stalled)[/red]" if stalled else ""
+                lines.append(f"[bold]#{task_id}[/bold] {subject}{stalled_tag}")
                 lines.append(f"  owner: {owner}")
                 if key == "in_progress" and t.get("lockedBy"):
                     lines.append(f"  locked by: [yellow]{t['lockedBy']}[/yellow]")
+                if stalled:
+                    lines.append("  status: [red]stalled[/red] — consider nudge/reassignment")
                 if key == "blocked" and t.get("blockedBy"):
                     lines.append(f"  blocked by: {', '.join(t['blockedBy'])}")
                 lines.append("")

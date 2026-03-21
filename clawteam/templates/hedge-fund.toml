@@ -14,11 +14,12 @@ Workflow:
 1. Create analysis tasks for each analyst via `clawteam task create {team_name} "Analyze [tickers]" -o [analyst]`
 2. Send task instructions to each analyst via `clawteam inbox send {team_name} [analyst] "Analyze ..."`
 3. Monitor progress via `clawteam board show {team_name}`
-4. Wait for risk-manager's consolidated risk report via `clawteam inbox receive {team_name}`
-5. Make final investment decisions based on all analyst signals + risk assessment
-6. Output a final report with: ticker, action (buy/sell/hold), quantity, confidence, reasoning
+4. Start a draft final report as soon as the first analyst outputs arrive; do not wait for perfect completeness to begin synthesis
+5. Incorporate the risk-manager's report (interim or final) via `clawteam inbox receive {team_name}`
+6. Make final investment decisions based on available analyst signals + risk assessment, explicitly marking any missing inputs or partial sections
+7. Output a final report with: ticker, action (buy/sell/hold), quantity, confidence, reasoning
 
-You must wait for ALL analysts to report before making decisions."""
+Do not block final synthesis on perfect completeness. Start with a skeleton, fill sections as they arrive, and clearly label any remaining gaps."""
 
 [[template.agents]]
 name = "buffett-analyst"
@@ -112,21 +113,23 @@ Then update task status: `clawteam task update {team_name} [task-id] --status co
 [[template.agents]]
 name = "risk-manager"
 type = "risk-manager"
-task = """You are the Risk Manager. Collect all analyst signals and assess portfolio risk.
+task = """You are the Risk Manager. Collect analyst signals and assess portfolio risk.
 The team goal is: {goal}
 
 Workflow:
-1. Wait for signals from ALL 5 analysts via `clawteam inbox receive {team_name}`
-2. For each ticker, consolidate analyst signals (bullish/bearish/neutral + confidence)
-3. Compute risk metrics:
+1. Check inbox signals via `clawteam inbox receive {team_name}` and monitor task/file progress via `clawteam board show {team_name}`
+2. As soon as you have at least 3 analyst signals, produce an interim risk report instead of waiting for perfect completeness
+3. For each ticker, consolidate available analyst signals (bullish/bearish/neutral + confidence)
+4. Compute risk metrics:
    - Volatility-adjusted position limits (low vol: 25% max, high vol: 10% max)
    - Correlation adjustment (high correlation: reduce exposure)
    - Maximum position size per ticker
-4. Send consolidated risk report to portfolio-manager:
-   `clawteam inbox send {team_name} portfolio-manager "RISK REPORT: [consolidated analysis with position limits]"`
-5. Update your task status when done
+5. Send your interim or final risk report to portfolio-manager:
+   `clawteam inbox send {team_name} portfolio-manager "RISK REPORT: [consolidated analysis with position limits, confidence, and missing-input notes]"`
+6. If some analysts are still missing, explicitly list the missing signals and proceed with a best-effort recommendation
+7. Update your task status when done
 
-You MUST wait for all 5 analyst signals before sending your report."""
+Do not wait forever for all 5 analyst signals. If 3+ signals are available, send an interim report immediately, then follow up with a refined report later if needed."""
 
 [[template.tasks]]
 subject = "Coordinate analysis and make final investment decisions"

@@ -214,6 +214,32 @@ class TestTaskLocking:
         assert updated.locked_by == "live-agent"
 
 
+class TestStalledTasks:
+    def test_list_stalled_returns_old_in_progress_tasks(self, store):
+        task = store.create("stalled task", owner="agent-a")
+        with patch("clawteam.spawn.registry.is_agent_alive", return_value=None):
+            store.update(task.id, status=TaskStatus.in_progress, caller="agent-a")
+        store.update(task.id, metadata={"note": "still running"})
+        updated = store.get(task.id)
+        updated.started_at = "2000-01-01T00:00:00+00:00"
+        store._save_unlocked(updated)
+
+        stalled = store.list_stalled(older_than_minutes=15)
+        assert len(stalled) == 1
+        assert stalled[0]["id"] == task.id
+        assert stalled[0]["owner"] == "agent-a"
+        assert stalled[0]["locked_by"] == "agent-a"
+        assert stalled[0]["age_minutes"] > 15
+
+    def test_list_stalled_ignores_fresh_tasks(self, store):
+        task = store.create("fresh task", owner="agent-a")
+        with patch("clawteam.spawn.registry.is_agent_alive", return_value=None):
+            store.update(task.id, status=TaskStatus.in_progress, caller="agent-a")
+
+        stalled = store.list_stalled(older_than_minutes=15)
+        assert stalled == []
+
+
 class TestDurationTracking:
     """Tests for the started_at / duration tracking feature."""
 

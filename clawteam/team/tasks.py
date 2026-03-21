@@ -36,6 +36,15 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_iso(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class TaskStore:
     """File-based task store with dependency tracking.
 
@@ -242,6 +251,36 @@ class TaskStore:
             "timed_completed": len(durations),
             "avg_duration_seconds": round(avg_duration, 2),
         }
+
+    def list_stalled(self, older_than_minutes: float = 15.0) -> list[dict[str, Any]]:
+        """Return in-progress tasks whose start time exceeds the threshold.
+
+        Useful for nudge/recovery tooling: these are tasks that still appear active
+        on the board but have been in progress longer than expected.
+        """
+        now = datetime.now(timezone.utc)
+        stalled: list[dict[str, Any]] = []
+        for task in self.list_tasks(status=TaskStatus.in_progress):
+            started = _parse_iso(task.started_at) or _parse_iso(task.updated_at)
+            if not started:
+                continue
+            age_minutes = (now - started).total_seconds() / 60.0
+            if age_minutes < older_than_minutes:
+                continue
+            stalled.append(
+                {
+                    "id": task.id,
+                    "subject": task.subject,
+                    "owner": task.owner,
+                    "status": task.status.value,
+                    "started_at": task.started_at,
+                    "updated_at": task.updated_at,
+                    "age_minutes": round(age_minutes, 1),
+                    "locked_by": task.locked_by,
+                }
+            )
+        stalled.sort(key=lambda t: t["age_minutes"], reverse=True)
+        return stalled
 
     def _save_unlocked(self, task: TaskItem) -> None:
         path = _task_path(self.team_name, task.id)
