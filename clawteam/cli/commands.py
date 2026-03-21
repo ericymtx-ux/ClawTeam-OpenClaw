@@ -1018,6 +1018,65 @@ def task_stalled(
     _output({"team": team, "olderThanMinutes": older_than_minutes, "tasks": stalled, "notified": notify}, _human)
 
 
+@task_app.command("close-on-artifact")
+def task_close_on_artifact(
+    team: str = typer.Argument(..., help="Team name"),
+    artifact: str = typer.Argument(..., help="Artifact path that proves downstream delivery exists"),
+    task_ids: str = typer.Option(..., "--task-ids", help="Comma-separated task IDs to mark completed when the artifact exists"),
+    note_to: str = typer.Option("", "--note-to", help="Optional recipient to notify after closing tasks (for example the team leader)"),
+):
+    """Mark specific tasks completed once a concrete artifact file exists.
+
+    This bridges the gap between runtime truth (files landed) and stale board state.
+    Useful when recovery/finisher workers produce the real deliverable but the original
+    task owners never wake up to update the board.
+    """
+    from clawteam.team.mailbox import MailboxManager
+    from clawteam.team.tasks import TaskStore
+    from clawteam.team.models import TaskStatus
+
+    artifact_path = Path(artifact).expanduser()
+    if not artifact_path.exists():
+        _output({"error": f"Artifact not found: {artifact_path}"}, lambda d: console.print(f"[red]{d['error']}[/red]"))
+        raise typer.Exit(1)
+
+    ids = [item.strip() for item in task_ids.split(",") if item.strip()]
+    store = TaskStore(team)
+    closed = []
+    for task_id in ids:
+        task = store.update(task_id, status=TaskStatus.completed, metadata={"closed_by_artifact": str(artifact_path)})
+        if task:
+            closed.append(_dump(task))
+
+    if note_to and closed:
+        mailbox = MailboxManager(team)
+        mailbox.send(
+            from_agent="clawteam-monitor",
+            to=note_to,
+            content=(
+                f"Artifact landed at {artifact_path}. Closed tasks: "
+                + ", ".join(t['id'] for t in closed)
+            ),
+        )
+
+    def _human(data):
+        console.print(f"[green]Artifact confirmed:[/green] {data['artifact']}")
+        if not data["closedTasks"]:
+            console.print("[yellow]No matching tasks were updated[/yellow]")
+            return
+        table = Table(title=f"Closed via Artifact - {team}")
+        table.add_column("ID", style="dim")
+        table.add_column("Subject", style="cyan")
+        table.add_column("Owner")
+        for item in data["closedTasks"]:
+            table.add_row(item["id"], item["subject"], item.get("owner") or "")
+        console.print(table)
+        if data.get("noteTo"):
+            console.print(f"[green]Notification sent to {data['noteTo']}[/green]")
+
+    _output({"team": team, "artifact": str(artifact_path), "closedTasks": closed, "noteTo": note_to or ""}, _human)
+
+
 # ============================================================================
 # Cost Commands
 # ============================================================================

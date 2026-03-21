@@ -458,6 +458,7 @@ clawteam task create <team> "subject" -o <owner> --blocked-by <id1>,<id2>
 clawteam task update <team> <id> --status completed   # auto-unblocks dependents
 clawteam task list <team> --status blocked --owner worker1
 clawteam task stalled <team> --older-than-minutes 15 --notify
+clawteam task close-on-artifact <team> /path/to/final-report.md --task-ids aaa11111,bbb22222 --note-to leader
 clawteam task wait <team> --timeout 300
 
 # Messaging
