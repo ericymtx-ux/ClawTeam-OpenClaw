@@ -47,6 +47,7 @@ class TmuxBackend(SpawnBackend):
             "CLAWTEAM_AGENT_TYPE": agent_type,
             "CLAWTEAM_TEAM_NAME": team_name,
             "CLAWTEAM_AGENT_LEADER": "0",
+            "CLAWTEAM_MEMORY_SCOPE": f"custom:team-{team_name}",
         }
         # Propagate user if set
         user = os.environ.get("CLAWTEAM_USER", "")
@@ -357,7 +358,7 @@ def _command_has_workspace_arg(command: list[str]) -> bool:
 def _confirm_workspace_trust_if_prompted(
     target: str,
     command: list[str],
-    timeout_seconds: float = 5.0,
+    timeout_seconds: float = 30.0,
     poll_interval_seconds: float = 0.2,
 ) -> bool:
     """Acknowledge first-run workspace trust prompts for interactive CLIs.
